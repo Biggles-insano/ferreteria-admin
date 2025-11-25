@@ -1,0 +1,64 @@
+import { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { hashPassword, comparePassword, generateToken } from '../utils/auth';
+
+const prisma = new PrismaClient();
+
+export const register = async (req: Request, res: Response) => {
+    try {
+        const { nombre, email, password } = req.body;
+
+        if (!nombre || !email || !password) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        const existingUser = await prisma.usuario.findFirst({ where: { email } });
+        if (existingUser) {
+            return res.status(400).json({ error: 'Email already exists' });
+        }
+
+        const hashedPassword = await hashPassword(password);
+
+        const user = await prisma.usuario.create({
+            data: {
+                nombre,
+                email,
+                contrasena_hash: hashedPassword,
+            },
+        });
+
+        const token = generateToken({ id: user.id, email: user.email });
+
+        res.status(201).json({ user: { id: user.id, nombre: user.nombre, email: user.email }, token });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+export const login = async (req: Request, res: Response) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        const user = await prisma.usuario.findFirst({ where: { email } });
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        const isMatch = await comparePassword(password, user.contrasena_hash);
+        if (!isMatch) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        const token = generateToken({ id: user.id, email: user.email });
+
+        res.json({ user: { id: user.id, nombre: user.nombre, email: user.email }, token });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};

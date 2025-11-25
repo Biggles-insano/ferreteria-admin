@@ -1,0 +1,1051 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Organización Física
+
+model Sucursal {
+  id                 Int       @id @default(autoincrement())
+  nombre             String    @db.VarChar(200)
+  direccion          String    @db.Text
+  telefono           String    @db.VarChar(32)
+  email              String    @db.VarChar(100)
+  is_activa          Boolean   @default(true)
+  fecha_creacion     DateTime  @default(now())
+  fecha_actualizacion DateTime @updatedAt
+
+  bodegas            Bodega[]
+  ordenes_compra     OrdenCompra[]
+  facturas_venta     FacturaVenta[]
+  cajas              Caja[]
+  series_folios      SerieFolio[]
+
+  @@map("sucursales")
+}
+
+model Bodega {
+  id                 Int       @id @default(autoincrement())
+  sucursal_id        Int
+  codigo             String    @unique @db.VarChar(20)
+  nombre             String    @db.VarChar(100)
+  es_default         Boolean   @default(false)
+  is_activa          Boolean   @default(true)
+  fecha_creacion     DateTime  @default(now())
+  fecha_actualizacion DateTime @updatedAt
+
+  sucursal           Sucursal  @relation(fields: [sucursal_id], references: [id])
+  existencias        Existencia[]
+  movimientos        MovimientoInventario[]
+  transferencias_origen TransferenciaInventario[] @relation("BodegaOrigen")
+  transferencias_destino TransferenciaInventario[] @relation("BodegaDestino")
+  conteos            ConteoFisico[]
+  ajustes            AjusteInventario[]
+  recepciones        RecepcionCompra[]
+  detalles_factura_venta DetalleFacturaVenta[]
+  detalles_devolucion_cliente DetalleDevolucionCliente[]
+  detalles_devolucion_proveedor DetalleDevolucionProveedor[]
+
+  @@map("bodegas")
+}
+
+// Catálogos de Producto
+
+model Categoria {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @db.VarChar(100)
+  descripcion String?   @db.Text
+  is_activa   Boolean   @default(true)
+  productos   Producto[]
+
+  @@map("categorias")
+}
+
+model Marca {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @db.VarChar(100)
+  is_activa   Boolean   @default(true)
+  productos   Producto[]
+
+  @@map("marcas")
+}
+
+model Unidad {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @db.VarChar(60)
+  simbolo     String    @db.VarChar(10)
+  decimales   Int       @default(2)
+  is_activa   Boolean   @default(true)
+  productos   Producto[]
+
+  @@map("unidades")
+}
+
+model Impuesto {
+  id              Int       @id @default(autoincrement())
+  nombre          String    @db.VarChar(100)
+  tasa_porcentaje Decimal   @db.Decimal(6, 3)
+  aplica_ventas   Boolean   @default(true)
+  aplica_compras  Boolean   @default(true)
+  is_activa       Boolean   @default(true)
+  productos       Producto[]
+
+  @@map("impuestos")
+}
+
+// Productos
+
+model Producto {
+  id                  Int       @id @default(autoincrement())
+  codigo_producto     String    @unique @db.VarChar(60)
+  nombre              String    @db.VarChar(200)
+  marca_id            Int
+  categoria_id        Int
+  unidad_id           Int
+  impuesto_id         Int
+  precio_base         Decimal   @db.Decimal(12, 2)
+  stock_minimo        Decimal   @default(0.00) @db.Decimal(12, 2)
+  punto_reorden       Decimal   @default(0.00) @db.Decimal(12, 2)
+  descripcion         String?   @db.Text
+  control_vencimiento Boolean   @default(false)
+  fecha_vencimiento   DateTime? @db.Date
+  is_activo           Boolean   @default(true)
+
+  marca               Marca     @relation(fields: [marca_id], references: [id])
+  categoria           Categoria @relation(fields: [categoria_id], references: [id])
+  unidad              Unidad    @relation(fields: [unidad_id], references: [id])
+  impuesto            Impuesto  @relation(fields: [impuesto_id], references: [id])
+
+  precios             PrecioProducto[]
+  promociones         Promocion[]
+  existencias         Existencia[]
+  movimientos         MovimientoInventario[]
+  transferencias      TransferenciaInventario[]
+  conteos             ConteoFisico[]
+  ajustes             AjusteInventario[]
+  reservas            ReservaInventario[]
+  detalles_orden_compra DetalleOrdenCompra[]
+  detalles_recepcion_compra RecepcionCompraDetalle[]
+  detalles_factura_proveedor DetalleFacturaProveedor[]
+  detalles_devolucion_proveedor DetalleDevolucionProveedor[]
+  detalles_cotizacion DetalleCotizacionVenta[]
+  detalles_pedido     DetallePedidoVenta[]
+  detalles_factura_venta DetalleFacturaVenta[]
+  detalles_devolucion_cliente DetalleDevolucionCliente[]
+
+  @@map("productos")
+}
+
+// Precios y Segmentación
+
+model ListaPrecio {
+  id        Int       @id @default(autoincrement())
+  nombre    String    @db.VarChar(100)
+  moneda    String    @db.VarChar(3)
+  moneda_rel Moneda?   @relation(fields: [moneda], references: [codigo]) // Optional relation if we want to link by code, or change schema to use ID. Schema says varchar(3).
+  is_activa Boolean   @default(true)
+
+  precios   PrecioProducto[]
+  clientes  Cliente[]
+
+  @@map("listas_precios")
+}
+
+model PrecioProducto {
+  id              Int         @id @default(autoincrement())
+  producto_id     Int
+  lista_precio_id Int
+  precio_base     Decimal     @db.Decimal(12, 2)
+  fecha_desde     DateTime    @db.Date
+  fecha_hasta     DateTime?   @db.Date
+
+  producto        Producto    @relation(fields: [producto_id], references: [id])
+  lista_precio    ListaPrecio @relation(fields: [lista_precio_id], references: [id])
+
+  @@map("precios_producto")
+}
+
+enum TipoPromocion {
+  descuento
+  regalo
+}
+
+model Promocion {
+  id               Int           @id @default(autoincrement())
+  nombre           String        @db.VarChar(100)
+  tipo             TipoPromocion
+  valor            Decimal       @db.Decimal(6, 2)
+  fecha_inicio     DateTime      @db.Date
+  fecha_fin        DateTime      @db.Date
+  producto_id      Int?
+  grupo_cliente_id Int?
+
+  producto         Producto?     @relation(fields: [producto_id], references: [id])
+  grupo_cliente    GrupoCliente? @relation(fields: [grupo_cliente_id], references: [id])
+
+  @@map("promociones")
+}
+
+model GrupoCliente {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @db.VarChar(100)
+  descripcion String?   @db.Text
+
+  clientes    Cliente[]
+  promociones Promocion[]
+
+  @@map("grupos_clientes")
+}
+
+// Terceros (CRM)
+
+model Cliente {
+  id               Int       @id @default(autoincrement())
+  nombre           String    @db.VarChar(200)
+  nit              String    @db.VarChar(32)
+  email            String    @db.VarChar(200)
+  telefono         String    @db.VarChar(32)
+  direccion        String    @db.Text
+  grupo_cliente_id Int
+  lista_precio_id  Int
+  exento_impuestos Boolean   @default(false)
+  termino_pago_id  Int
+  is_activo        Boolean   @default(true)
+  fecha_creacion   DateTime  @default(now())
+  fecha_actualizacion DateTime @updatedAt
+
+  grupo_cliente    GrupoCliente @relation(fields: [grupo_cliente_id], references: [id])
+  lista_precio     ListaPrecio  @relation(fields: [lista_precio_id], references: [id])
+  termino_pago     TerminoPago  @relation(fields: [termino_pago_id], references: [id])
+
+  contactos        ContactoCliente[]
+  direcciones      Direccion[]
+  reservas         ReservaInventario[]
+  cotizaciones     CotizacionVenta[]
+  pedidos          PedidoVenta[]
+  facturas         FacturaVenta[]
+  notas_credito    NotaCredito[]
+  cuentas_por_cobrar CuentaPorCobrar[]
+  cobros           Cobro[]
+
+  @@map("clientes")
+}
+
+model Proveedor {
+  id               Int       @id @default(autoincrement())
+  nombre           String    @db.VarChar(200)
+  nit              String    @db.VarChar(32)
+  email            String    @db.VarChar(200)
+  telefono         String    @db.VarChar(32)
+  direccion        String    @db.Text
+  termino_pago_id  Int
+  is_activo        Boolean   @default(true)
+  fecha_creacion   DateTime  @default(now())
+  fecha_actualizacion DateTime @updatedAt
+
+  termino_pago     TerminoPago @relation(fields: [termino_pago_id], references: [id])
+
+  contactos        ContactoProveedor[]
+  ordenes_compra   OrdenCompra[]
+  facturas         FacturaProveedor[]
+  devoluciones     DevolucionProveedor[]
+  cuentas_por_cobrar CuentaPorCobrar[] // Assuming this handles payables too or separate table? Schema says "Cuentas por Cobrar" but includes provider_id. Usually "Cuentas por Pagar". Keeping as per schema.
+  pagos            PagoProveedor[]
+
+  @@map("proveedores")
+}
+
+model ContactoCliente {
+  id          Int      @id @default(autoincrement())
+  cliente_id  Int
+  nombre      String   @db.VarChar(100)
+  telefono    String   @db.VarChar(32)
+  email       String   @db.VarChar(200)
+  direccion   String   @db.Text
+  fecha_creacion DateTime @default(now())
+  fecha_actualizacion DateTime @updatedAt
+
+  cliente     Cliente  @relation(fields: [cliente_id], references: [id])
+
+  @@map("contactos_cliente")
+}
+
+model ContactoProveedor {
+  id           Int      @id @default(autoincrement())
+  proveedor_id Int
+  nombre       String   @db.VarChar(100)
+  telefono     String   @db.VarChar(32)
+  email        String   @db.VarChar(200)
+  direccion    String   @db.Text
+  fecha_creacion DateTime @default(now())
+  fecha_actualizacion DateTime @updatedAt
+
+  proveedor    Proveedor @relation(fields: [proveedor_id], references: [id])
+
+  @@map("contactos_proveedor")
+}
+
+model Direccion {
+  id          Int      @id @default(autoincrement())
+  cliente_id  Int
+  direccion   String   @db.Text
+  es_principal Boolean @default(true)
+  fecha_creacion DateTime @default(now())
+  fecha_actualizacion DateTime @updatedAt
+
+  cliente     Cliente  @relation(fields: [cliente_id], references: [id])
+
+  @@map("direcciones")
+}
+
+// Inventario
+
+model Existencia {
+  id                  Int      @id @default(autoincrement())
+  producto_id         Int
+  bodega_id           Int
+  cantidad            Decimal  @db.Decimal(12, 2)
+  fecha_actualizacion DateTime @updatedAt
+
+  producto            Producto @relation(fields: [producto_id], references: [id])
+  bodega              Bodega   @relation(fields: [bodega_id], references: [id])
+
+  @@unique([producto_id, bodega_id])
+  @@map("existencias")
+}
+
+enum TipoMovimientoInventario {
+  entrada
+  salida
+  ajuste
+}
+
+enum OrigenMovimientoInventario {
+  orden_compra_detalle
+  recepcion_compra_detalle
+  factura_venta_detalle
+  devolucion_cliente_detalle
+  devolucion_proveedor_detalle
+  ajuste
+  conteo
+  transferencia
+}
+
+model MovimientoInventario {
+  id              Int       @id @default(autoincrement())
+  producto_id     Int
+  bodega_id       Int
+  cantidad        Decimal   @db.Decimal(12, 2)
+  tipo_movimiento TipoMovimientoInventario
+  fecha           DateTime
+  origen_tipo     OrigenMovimientoInventario
+  origen_id       Int
+  comentarios     String?   @db.Text
+
+  producto        Producto  @relation(fields: [producto_id], references: [id])
+  bodega          Bodega    @relation(fields: [bodega_id], references: [id])
+
+  @@map("movimientos_inventario")
+}
+
+model TransferenciaInventario {
+  id                  Int      @id @default(autoincrement())
+  producto_id         Int
+  cantidad            Decimal  @db.Decimal(12, 2)
+  bodega_origen_id    Int
+  bodega_destino_id   Int
+  fecha_transferencia DateTime
+  comentarios         String?  @db.Text
+
+  producto            Producto @relation(fields: [producto_id], references: [id])
+  bodega_origen       Bodega   @relation("BodegaOrigen", fields: [bodega_origen_id], references: [id])
+  bodega_destino      Bodega   @relation("BodegaDestino", fields: [bodega_destino_id], references: [id])
+
+  @@map("transferencias_inventario")
+}
+
+model ConteoFisico {
+  id               Int      @id @default(autoincrement())
+  producto_id      Int
+  bodega_id        Int
+  cantidad_contada Decimal  @db.Decimal(12, 2)
+  fecha_conteo     DateTime
+  comentarios      String?  @db.Text
+
+  producto         Producto @relation(fields: [producto_id], references: [id])
+  bodega           Bodega   @relation(fields: [bodega_id], references: [id])
+
+  @@map("conteos_fisicos")
+}
+
+enum TipoAjusteInventario {
+  sobrante
+  faltante
+  dano // "daño" changed to "dano" to avoid special chars in enum if preferred, or keep as is. Prisma supports unicode.
+  robo
+}
+
+model AjusteInventario {
+  id                Int      @id @default(autoincrement())
+  producto_id       Int
+  bodega_id         Int
+  cantidad_ajustada Decimal  @db.Decimal(12, 2)
+  tipo_ajuste       TipoAjusteInventario
+  fecha_ajuste      DateTime
+  comentarios       String?  @db.Text
+
+  producto          Producto @relation(fields: [producto_id], references: [id])
+  bodega            Bodega   @relation(fields: [bodega_id], references: [id])
+
+  @@map("ajustes_inventario")
+}
+
+enum EstadoReserva {
+  pendiente
+  confirmada
+  cancelada
+}
+
+model ReservaInventario {
+  id                 Int           @id @default(autoincrement())
+  producto_id        Int
+  cliente_id         Int
+  cantidad_reservada Decimal       @db.Decimal(12, 2)
+  fecha_reserva      DateTime
+  estado_reserva     EstadoReserva
+  comentarios        String?       @db.Text
+
+  producto           Producto      @relation(fields: [producto_id], references: [id])
+  cliente            Cliente       @relation(fields: [cliente_id], references: [id])
+
+  @@map("reservas_inventario")
+}
+
+// Compras
+
+enum EstadoOrdenCompra {
+  pendiente
+  confirmada
+  entregada
+  cancelada
+}
+
+model OrdenCompra {
+  id                  Int               @id @default(autoincrement())
+  proveedor_id        Int
+  sucursal_id         Int
+  fecha_orden         DateTime
+  estado              EstadoOrdenCompra
+  fecha_creacion      DateTime          @default(now())
+  fecha_actualizacion DateTime          @updatedAt
+
+  proveedor           Proveedor         @relation(fields: [proveedor_id], references: [id])
+  sucursal            Sucursal          @relation(fields: [sucursal_id], references: [id])
+  detalles            DetalleOrdenCompra[]
+  recepciones         RecepcionCompra[]
+
+  @@map("ordenes_compra")
+}
+
+model DetalleOrdenCompra {
+  id              Int         @id @default(autoincrement())
+  orden_compra_id Int
+  producto_id     Int
+  cantidad        Decimal     @db.Decimal(12, 2)
+  precio_unitario Decimal     @db.Decimal(12, 2)
+  descuento       Decimal     @default(0.00) @db.Decimal(12, 2)
+  impuesto_monto  Decimal     @default(0.00) @db.Decimal(12, 2)
+  total           Decimal     @db.Decimal(12, 2)
+
+  orden_compra    OrdenCompra @relation(fields: [orden_compra_id], references: [id])
+  producto        Producto    @relation(fields: [producto_id], references: [id])
+  recepciones_detalle RecepcionCompraDetalle[]
+
+  @@map("detalle_orden_compra")
+}
+
+enum EstadoRecepcionCompra {
+  pendiente
+  completa
+  parcial
+  rechazada
+}
+
+model RecepcionCompra {
+  id              Int                   @id @default(autoincrement())
+  orden_compra_id Int
+  bodega_id       Int
+  fecha_recepcion DateTime
+  estado          EstadoRecepcionCompra
+  fecha_creacion  DateTime              @default(now())
+
+  orden_compra    OrdenCompra           @relation(fields: [orden_compra_id], references: [id])
+  bodega          Bodega                @relation(fields: [bodega_id], references: [id])
+  detalles        RecepcionCompraDetalle[]
+
+  @@map("recepciones_compra")
+}
+
+model RecepcionCompraDetalle {
+  id                      Int                @id @default(autoincrement())
+  recepcion_compra_id     Int
+  producto_id             Int
+  orden_compra_detalle_id Int?
+  cantidad_recibida       Decimal            @db.Decimal(12, 2)
+  costo_unitario          Decimal            @db.Decimal(12, 2)
+  total                   Decimal            @db.Decimal(12, 2)
+
+  recepcion_compra        RecepcionCompra    @relation(fields: [recepcion_compra_id], references: [id])
+  producto                Producto           @relation(fields: [producto_id], references: [id])
+  orden_compra_detalle    DetalleOrdenCompra? @relation(fields: [orden_compra_detalle_id], references: [id])
+
+  @@map("recepciones_compra_detalle")
+}
+
+model FacturaProveedor {
+  id             Int       @id @default(autoincrement())
+  proveedor_id   Int
+  fecha_factura  DateTime
+  moneda_id      Int
+  tipo_cambio    Decimal?  @db.Decimal(12, 6)
+  serie_folio_id Int
+  serie          String    @db.VarChar(10)
+  folio          Int
+  monto_total    Decimal   @db.Decimal(12, 2)
+  fecha_creacion DateTime  @default(now())
+
+  proveedor      Proveedor @relation(fields: [proveedor_id], references: [id])
+  moneda         Moneda    @relation(fields: [moneda_id], references: [id])
+  serie_folio    SerieFolio @relation(fields: [serie_folio_id], references: [id])
+
+  detalles       DetalleFacturaProveedor[]
+  cuentas_por_cobrar CuentaPorCobrar[] // Linked for payables
+  pagos          PagoProveedor[]
+
+  @@map("factura_proveedor")
+}
+
+model DetalleFacturaProveedor {
+  id              Int              @id @default(autoincrement())
+  factura_id      Int
+  producto_id     Int
+  cantidad        Decimal          @db.Decimal(12, 2)
+  precio_unitario Decimal          @db.Decimal(12, 2)
+  total           Decimal          @db.Decimal(12, 2)
+
+  factura         FacturaProveedor @relation(fields: [factura_id], references: [id])
+  producto        Producto         @relation(fields: [producto_id], references: [id])
+
+  @@map("detalle_factura_proveedor")
+}
+
+model DevolucionProveedor {
+  id               Int       @id @default(autoincrement())
+  proveedor_id     Int
+  fecha_devolucion DateTime
+  monto_total      Decimal   @db.Decimal(12, 2)
+  fecha_creacion   DateTime  @default(now())
+
+  proveedor        Proveedor @relation(fields: [proveedor_id], references: [id])
+  detalles         DetalleDevolucionProveedor[]
+
+  @@map("devolucion_proveedor")
+}
+
+model DetalleDevolucionProveedor {
+  id            Int                 @id @default(autoincrement())
+  devolucion_id Int
+  producto_id   Int
+  bodega_id     Int
+  cantidad      Decimal             @db.Decimal(12, 2)
+  total         Decimal             @db.Decimal(12, 2)
+
+  devolucion    DevolucionProveedor @relation(fields: [devolucion_id], references: [id])
+  producto      Producto            @relation(fields: [producto_id], references: [id])
+  bodega        Bodega              @relation(fields: [bodega_id], references: [id])
+
+  @@map("detalle_devolucion_proveedor")
+}
+
+// Ventas
+
+enum EstadoCotizacion {
+  pendiente
+  confirmada
+  rechazada
+}
+
+model CotizacionVenta {
+  id               Int              @id @default(autoincrement())
+  cliente_id       Int
+  vendedor_id      Int
+  fecha_cotizacion DateTime
+  monto_total      Decimal          @db.Decimal(12, 2)
+  estado           EstadoCotizacion
+  fecha_creacion   DateTime         @default(now())
+
+  cliente          Cliente          @relation(fields: [cliente_id], references: [id])
+  vendedor         Usuario          @relation(fields: [vendedor_id], references: [id])
+  detalles         DetalleCotizacionVenta[]
+
+  @@map("cotizaciones_venta")
+}
+
+model DetalleCotizacionVenta {
+  id              Int             @id @default(autoincrement())
+  cotizacion_id   Int
+  producto_id     Int
+  cantidad        Decimal         @db.Decimal(12, 2)
+  precio_unitario Decimal         @db.Decimal(12, 2)
+  descuento       Decimal         @default(0.00) @db.Decimal(12, 2)
+  total           Decimal         @db.Decimal(12, 2)
+
+  cotizacion      CotizacionVenta @relation(fields: [cotizacion_id], references: [id])
+  producto        Producto        @relation(fields: [producto_id], references: [id])
+
+  @@map("detalle_cotizacion_venta")
+}
+
+enum EstadoPedido {
+  pendiente
+  confirmado
+  cancelado
+}
+
+model PedidoVenta {
+  id             Int          @id @default(autoincrement())
+  cliente_id     Int
+  vendedor_id    Int
+  fecha_pedido   DateTime
+  monto_total    Decimal      @db.Decimal(12, 2)
+  estado         EstadoPedido
+  fecha_creacion DateTime     @default(now())
+
+  cliente        Cliente      @relation(fields: [cliente_id], references: [id])
+  vendedor       Usuario      @relation(fields: [vendedor_id], references: [id])
+  detalles       DetallePedidoVenta[]
+
+  @@map("pedidos_venta")
+}
+
+model DetallePedidoVenta {
+  id              Int         @id @default(autoincrement())
+  pedido_id       Int
+  producto_id     Int
+  cantidad        Decimal     @db.Decimal(12, 2)
+  precio_unitario Decimal     @db.Decimal(12, 2)
+  descuento       Decimal     @default(0.00) @db.Decimal(12, 2)
+  total           Decimal     @db.Decimal(12, 2)
+
+  pedido          PedidoVenta @relation(fields: [pedido_id], references: [id])
+  producto        Producto    @relation(fields: [producto_id], references: [id])
+
+  @@map("detalle_pedido_venta")
+}
+
+enum EstadoFactura {
+  pendiente
+  pagada
+  cancelada
+}
+
+model FacturaVenta {
+  id             Int           @id @default(autoincrement())
+  cliente_id     Int
+  sucursal_id    Int
+  vendedor_id    Int
+  fecha_factura  DateTime
+  moneda_id      Int
+  tipo_cambio    Decimal?      @db.Decimal(12, 6)
+  serie_folio_id Int
+  serie          String        @db.VarChar(10)
+  folio          Int
+  monto_total    Decimal       @db.Decimal(12, 2)
+  estado         EstadoFactura
+  metodo_pago_id Int
+  fecha_creacion DateTime      @default(now())
+
+  cliente        Cliente       @relation(fields: [cliente_id], references: [id])
+  sucursal       Sucursal      @relation(fields: [sucursal_id], references: [id])
+  vendedor       Usuario       @relation(fields: [vendedor_id], references: [id])
+  moneda         Moneda        @relation(fields: [moneda_id], references: [id])
+  serie_folio    SerieFolio    @relation(fields: [serie_folio_id], references: [id])
+  metodo_pago    MetodoPago    @relation(fields: [metodo_pago_id], references: [id])
+
+  detalles       DetalleFacturaVenta[]
+  devoluciones   DevolucionCliente[]
+  cuentas_por_cobrar CuentaPorCobrar[]
+  cobros         Cobro[]
+
+  @@map("factura_venta")
+}
+
+model DetalleFacturaVenta {
+  id              Int          @id @default(autoincrement())
+  factura_id      Int
+  producto_id     Int
+  bodega_id       Int
+  cantidad        Decimal      @db.Decimal(12, 2)
+  precio_unitario Decimal      @db.Decimal(12, 2)
+  descuento       Decimal      @db.Decimal(12, 2)
+  total           Decimal      @db.Decimal(12, 2)
+
+  factura         FacturaVenta @relation(fields: [factura_id], references: [id])
+  producto        Producto     @relation(fields: [producto_id], references: [id])
+  bodega          Bodega       @relation(fields: [bodega_id], references: [id])
+
+  @@map("detalle_factura_venta")
+}
+
+model DevolucionCliente {
+  id               Int       @id @default(autoincrement())
+  factura_id       Int
+  fecha_devolucion DateTime
+  monto_total      Decimal   @db.Decimal(12, 2)
+  fecha_creacion   DateTime  @default(now())
+
+  factura          FacturaVenta @relation(fields: [factura_id], references: [id])
+  detalles         DetalleDevolucionCliente[]
+
+  @@map("devolucion_cliente")
+}
+
+model DetalleDevolucionCliente {
+  id            Int               @id @default(autoincrement())
+  devolucion_id Int
+  producto_id   Int
+  bodega_id     Int
+  cantidad      Decimal           @db.Decimal(12, 2)
+  total         Decimal           @db.Decimal(12, 2)
+
+  devolucion    DevolucionCliente @relation(fields: [devolucion_id], references: [id])
+  producto      Producto          @relation(fields: [producto_id], references: [id])
+  bodega        Bodega            @relation(fields: [bodega_id], references: [id])
+
+  @@map("detalle_devolucion_cliente")
+}
+
+model NotaCredito {
+  id            Int      @id @default(autoincrement())
+  cliente_id    Int
+  monto         Decimal  @db.Decimal(12, 2)
+  descripcion   String?  @db.Text
+  fecha_emision DateTime
+
+  cliente       Cliente  @relation(fields: [cliente_id], references: [id])
+
+  @@map("notas_credito")
+}
+
+// Cuentas por Cobrar y Finanzas
+
+enum EstadoCuenta {
+  pendiente
+  pagado
+  vencido
+}
+
+model CuentaPorCobrar {
+  id                   Int          @id @default(autoincrement())
+  cliente_id           Int?
+  proveedor_id         Int?
+  factura_venta_id     Int?
+  factura_proveedor_id Int?
+  monto_pendiente      Decimal      @db.Decimal(12, 2)
+  fecha_vencimiento    DateTime
+  estado               EstadoCuenta
+  fecha_creacion       DateTime     @default(now())
+
+  cliente              Cliente?     @relation(fields: [cliente_id], references: [id])
+  proveedor            Proveedor?   @relation(fields: [proveedor_id], references: [id])
+  factura_venta        FacturaVenta? @relation(fields: [factura_venta_id], references: [id])
+  factura_proveedor    FacturaProveedor? @relation(fields: [factura_proveedor_id], references: [id])
+
+  cobros               Cobro[]
+  pagos                PagoProveedor[]
+
+  @@map("cuentas_por_cobrar")
+}
+
+// Caja y Tesorería
+
+model Caja {
+  id                  Int       @id @default(autoincrement())
+  sucursal_id         Int
+  codigo              String    @unique @db.VarChar(20)
+  nombre              String    @db.VarChar(100)
+  is_activa           Boolean   @default(true)
+  fecha_creacion      DateTime  @default(now())
+  fecha_actualizacion DateTime  @updatedAt
+
+  sucursal            Sucursal  @relation(fields: [sucursal_id], references: [id])
+  aperturas           AperturaCaja[]
+  cierres             CierreCaja[]
+  cobros              Cobro[]
+  pagos               PagoProveedor[]
+  movimientos         MovimientoCaja[]
+
+  @@map("cajas")
+}
+
+model AperturaCaja {
+  id             Int      @id @default(autoincrement())
+  caja_id        Int
+  usuario_id     Int
+  monto_apertura Decimal  @db.Decimal(12, 2)
+  fecha_apertura DateTime
+  comentarios    String?  @db.Text
+
+  caja           Caja     @relation(fields: [caja_id], references: [id])
+  usuario        Usuario  @relation(fields: [usuario_id], references: [id])
+
+  @@map("aperturas_caja")
+}
+
+model CierreCaja {
+  id           Int      @id @default(autoincrement())
+  caja_id      Int
+  usuario_id   Int
+  monto_cierre Decimal  @db.Decimal(12, 2)
+  fecha_cierre DateTime
+  comentarios  String?  @db.Text
+
+  caja         Caja     @relation(fields: [caja_id], references: [id])
+  usuario      Usuario  @relation(fields: [usuario_id], references: [id])
+
+  @@map("cierres_caja")
+}
+
+model Cobro {
+  id               Int              @id @default(autoincrement())
+  caja_id          Int
+  cliente_id       Int
+  factura_venta_id Int?
+  cuenta_id        Int?
+  monto            Decimal          @db.Decimal(12, 2)
+  metodo_pago_id   Int
+  fecha            DateTime
+  comentarios      String?          @db.Text
+
+  caja             Caja             @relation(fields: [caja_id], references: [id])
+  cliente          Cliente          @relation(fields: [cliente_id], references: [id])
+  factura_venta    FacturaVenta?    @relation(fields: [factura_venta_id], references: [id])
+  cuenta           CuentaPorCobrar? @relation(fields: [cuenta_id], references: [id])
+  metodo_pago      MetodoPago       @relation(fields: [metodo_pago_id], references: [id])
+
+  @@map("cobros")
+}
+
+model PagoProveedor {
+  id                   Int              @id @default(autoincrement())
+  caja_id              Int
+  proveedor_id         Int
+  factura_proveedor_id Int?
+  cuenta_id            Int?
+  monto                Decimal          @db.Decimal(12, 2)
+  metodo_pago_id       Int
+  fecha                DateTime
+  comentarios          String?          @db.Text
+
+  caja                 Caja             @relation(fields: [caja_id], references: [id])
+  proveedor            Proveedor        @relation(fields: [proveedor_id], references: [id])
+  factura_proveedor    FacturaProveedor? @relation(fields: [factura_proveedor_id], references: [id])
+  cuenta               CuentaPorCobrar? @relation(fields: [cuenta_id], references: [id])
+  metodo_pago          MetodoPago       @relation(fields: [metodo_pago_id], references: [id])
+
+  @@map("pagos_proveedor")
+}
+
+model MetodoPago {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @db.VarChar(100)
+  descripcion String?   @db.Text
+  es_activo   Boolean   @default(true)
+
+  facturas_venta FacturaVenta[]
+  cobros         Cobro[]
+  pagos          PagoProveedor[]
+  movimientos    MovimientoCaja[]
+
+  @@map("metodos_pago")
+}
+
+enum TipoMovimientoCaja {
+  ingreso
+  egreso
+}
+
+model MovimientoCaja {
+  id              Int                @id @default(autoincrement())
+  tipo_movimiento TipoMovimientoCaja
+  monto           Decimal            @db.Decimal(12, 2)
+  caja_id         Int
+  metodo_pago_id  Int
+  fecha           DateTime
+  comentarios     String?            @db.Text
+
+  caja            Caja               @relation(fields: [caja_id], references: [id])
+  metodo_pago     MetodoPago         @relation(fields: [metodo_pago_id], references: [id])
+
+  @@map("movimientos_caja")
+}
+
+// Fiscal y Numeración
+
+model TipoDocumento {
+  id             Int          @id @default(autoincrement())
+  nombre         String       @db.VarChar(100)
+  codigo         String       @db.VarChar(10)
+  descripcion    String?      @db.Text
+  fecha_creacion DateTime     @default(now())
+
+  series_folios  SerieFolio[]
+
+  @@map("tipos_documento")
+}
+
+model SerieFolio {
+  id                Int           @id @default(autoincrement())
+  tipo_documento_id Int
+  sucursal_id       Int
+  serie             String        @db.VarChar(10)
+  folio_inicial     Int
+  folio_actual      Int
+  fecha_creacion    DateTime      @default(now())
+
+  tipo_documento    TipoDocumento @relation(fields: [tipo_documento_id], references: [id])
+  sucursal          Sucursal      @relation(fields: [sucursal_id], references: [id])
+  facturas_venta    FacturaVenta[]
+  facturas_proveedor FacturaProveedor[]
+
+  @@map("series_folios")
+}
+
+model Moneda {
+  id             Int       @id @default(autoincrement())
+  codigo         String    @unique @db.VarChar(3)
+  nombre         String    @db.VarChar(100)
+  simbolo        String    @db.VarChar(5)
+  fecha_creacion DateTime  @default(now())
+
+  listas_precios ListaPrecio[] // Typo in original schema "Listas de Precios" vs model name, adjusting.
+  facturas_venta FacturaVenta[]
+  facturas_proveedor FacturaProveedor[]
+
+  @@map("monedas")
+}
+
+// Fix for Moneda relation in ListaPrecio
+// Re-defining ListaPrecio relation to Moneda if needed, but schema says "moneda varchar(3)" in ListaPrecio, not FK.
+// However, FacturaVenta has moneda_id.
+// I will keep ListaPrecio as is in schema (varchar) but usually it should be FK. Sticking to schema.
+
+model TerminoPago {
+  id           Int       @id @default(autoincrement())
+  nombre       String    @db.VarChar(100)
+  dias_credito Int
+  descripcion  String?   @db.Text
+  fecha_creacion DateTime @default(now())
+
+  clientes     Cliente[]
+  proveedores  Proveedor[]
+
+  @@map("terminos_pago")
+}
+
+// Seguridad y Auditoría
+
+model Usuario {
+  id                 Int       @id @default(autoincrement())
+  nombre             String    @db.VarChar(100)
+  email              String    @db.VarChar(200)
+  contrasena_hash    String    @db.VarChar(255) @map("contraseña_hash")
+  rol_por_defecto_id Int?
+  fecha_creacion     DateTime  @default(now())
+  is_activo          Boolean   @default(true)
+
+  rol_por_defecto    Rol?      @relation(fields: [rol_por_defecto_id], references: [id])
+  roles              UsuarioRol[]
+  bitacoras          BitacoraActividad[]
+  cotizaciones       CotizacionVenta[]
+  pedidos            PedidoVenta[]
+  facturas_venta     FacturaVenta[]
+  aperturas_caja     AperturaCaja[]
+  cierres_caja       CierreCaja[]
+
+  @@map("usuarios")
+}
+
+model Rol {
+  id                  Int       @id @default(autoincrement())
+  nombre              String    @db.VarChar(100)
+  descripcion         String?   @db.Text
+  fecha_creacion      DateTime  @default(now())
+  fecha_actualizacion DateTime  @updatedAt
+
+  usuarios_defecto    Usuario[]
+  usuarios_asignados  UsuarioRol[]
+  permisos            RolPermiso[]
+
+  @@map("roles")
+}
+
+model Permiso {
+  id             Int          @id @default(autoincrement())
+  clave          String       @db.VarChar(100)
+  descripcion    String?      @db.Text
+  fecha_creacion DateTime     @default(now())
+
+  roles          RolPermiso[]
+
+  @@map("permisos")
+}
+
+model UsuarioRol {
+  id         Int     @id @default(autoincrement())
+  usuario_id Int
+  rol_id     Int
+
+  usuario    Usuario @relation(fields: [usuario_id], references: [id])
+  rol        Rol     @relation(fields: [rol_id], references: [id])
+
+  @@map("usuario_roles")
+}
+
+model RolPermiso {
+  id         Int     @id @default(autoincrement())
+  rol_id     Int
+  permiso_id Int
+
+  rol        Rol     @relation(fields: [rol_id], references: [id])
+  permiso    Permiso @relation(fields: [permiso_id], references: [id])
+
+  @@map("rol_permisos")
+}
+
+model BitacoraActividad {
+  id         Int      @id @default(autoincrement())
+  usuario_id Int
+  accion     String   @db.Text
+  fecha      DateTime
+  detalle    String?  @db.Text
+
+  usuario    Usuario  @relation(fields: [usuario_id], references: [id])
+
+  @@map("bitacora_actividades")
+}
+
+model Adjunto {
+  id             Int      @id @default(autoincrement())
+  tabla          String   @db.VarChar(100)
+  registro_id    Int
+  ruta_archivo   String   @db.VarChar(255)
+  tipo_archivo   String   @db.VarChar(50)
+  fecha_creacion DateTime @default(now())
+
+  @@map("adjuntos")
+}
