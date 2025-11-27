@@ -40,18 +40,21 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
 });
 exports.register = register;
+// Generate a dummy hash for timing attacks mitigation
+// This hash matches "password" with cost 10, pre-calculated to avoid startup delay
+const DUMMY_HASH = '$2b$10$RJUaQ3QnEEUrnjFDtnShhunVXOkxdmFawm675NkOtgX.P.8zo6COa';
 const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { email, password } = req.body;
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Missing required fields' });
-        }
+        // Validation is handled by middleware now, but we keep this as backup or remove it
+        // if (!email || !password) ... (Removed since Zod handles it)
         const user = yield prisma.usuario.findFirst({ where: { email } });
-        if (!user) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        const isMatch = yield (0, auth_1.comparePassword)(password, user.contrasena_hash);
-        if (!isMatch) {
+        // Timing Attack Mitigation:
+        // Always execute comparePassword to consume the same amount of time
+        // regardless of whether the user exists or not.
+        const targetHash = user ? user.contrasena_hash : DUMMY_HASH;
+        const isMatch = yield (0, auth_1.comparePassword)(password, targetHash);
+        if (!user || !isMatch) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         const token = (0, auth_1.generateToken)({ id: user.id, email: user.email });
