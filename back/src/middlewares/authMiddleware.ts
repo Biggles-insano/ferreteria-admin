@@ -21,3 +21,37 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     req.user = user;
     next();
 };
+
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+
+export const authorizeRole = (allowedRoles: string[]) => {
+    return async (req: AuthRequest, res: Response, next: NextFunction) => {
+        try {
+            if (!req.user || !req.user.id) {
+                return res.status(401).json({ error: 'Usuario no autenticado' });
+            }
+
+            const userWithRoles = await prisma.usuario.findUnique({
+                where: { id: req.user.id },
+                include: { roles: { include: { rol: true } } }
+            });
+
+            if (!userWithRoles) {
+                return res.status(401).json({ error: 'Usuario no encontrado' });
+            }
+
+            const userRoleNames = userWithRoles.roles.map(ur => ur.rol.nombre);
+            const hasPermission = userRoleNames.some(role => allowedRoles.includes(role));
+
+            if (!hasPermission) {
+                return res.status(403).json({ error: 'Acceso denegado: No tienes permisos suficientes' });
+            }
+
+            next();
+        } catch (error) {
+            console.error('Authorization error:', error);
+            res.status(500).json({ error: 'Error interno de autorización' });
+        }
+    };
+};

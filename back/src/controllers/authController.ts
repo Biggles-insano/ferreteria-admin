@@ -47,7 +47,16 @@ export const login = async (req: Request, res: Response) => {
         // Validation is handled by middleware now, but we keep this as backup or remove it
         // if (!email || !password) ... (Removed since Zod handles it)
 
-        const user = await prisma.usuario.findFirst({ where: { email } });
+        const user = await prisma.usuario.findFirst({
+            where: { email },
+            include: {
+                roles: {
+                    include: {
+                        rol: true
+                    }
+                }
+            }
+        });
 
         // Timing Attack Mitigation:
         // Always execute comparePassword to consume the same amount of time
@@ -61,7 +70,17 @@ export const login = async (req: Request, res: Response) => {
 
         const token = generateToken({ id: user.id, email: user.email });
 
-        res.json({ user: { id: user.id, nombre: user.nombre, email: user.email }, token });
+        const userRoles = user.roles.map(ur => ur.rol.nombre);
+
+        res.json({
+            user: {
+                id: user.id,
+                nombre: user.nombre,
+                email: user.email,
+                roles: userRoles
+            },
+            token
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Internal Server Error' });

@@ -18,6 +18,8 @@ import partnerRoutes from './routes/partnerRoutes';
 import salesRoutes from './routes/salesRoutes';
 import purchaseRoutes from './routes/purchaseRoutes';
 import financeRoutes from './routes/financeRoutes';
+import userRoutes from './routes/userRoutes';
+import dashboardRoutes from './routes/dashboardRoutes';
 
 import { authenticateToken } from './middlewares/authMiddleware';
 import { errorHandler } from './middlewares/errorHandler';
@@ -42,6 +44,8 @@ app.use('/api/terceros', partnerRoutes);
 app.use('/api/ventas', salesRoutes);
 app.use('/api/compras', purchaseRoutes);
 app.use('/api/finanzas', financeRoutes);
+app.use('/api/usuarios', userRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
